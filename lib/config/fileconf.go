@@ -897,8 +897,24 @@ type Databases struct {
 
 // Selector represents a single resource monitor selector.
 type Selector struct {
-	// MatchLabels represents a selector that matches labels.
+	// MatchLabels is a selector that matches labels.
 	MatchLabels map[string]apiutils.Strings `yaml:"match_labels,omitempty"`
+	// MatchRDS is a selector that matches RDS databases.
+	MatchRDS MatchRDS `yaml:"match_rds,omitempty"`
+	// MatchRedshift is a selector that matches Redshift databases.
+	MatchRedshift MatchRedshift `yaml:"match_redshift,omitempty"`
+}
+
+// MatchRDS represents RDS databases matcher.
+type MatchRDS struct {
+	// Tags are tags to match when importing RDS databases.
+	Tags map[string]apiutils.Strings `yaml:"tags,omitempty"`
+}
+
+// MatchRedshift represents Redshift databases matcher.
+type MatchRedshift struct {
+	// Tags are tags to match when importing Redshift databases.
+	Tags map[string]apiutils.Strings `yaml:"tags,omitempty"`
 }
 
 // Database represents a single database proxied by the service.
