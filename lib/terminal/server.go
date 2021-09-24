@@ -27,13 +27,13 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/gravitational/teleport/lib/terminal/terminalv1"
+	terminalv1 "github.com/gravitational/teleport/lib/terminal/service"
 	"github.com/gravitational/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
-	terminalpb "github.com/gravitational/teleport/protogen/teleport/terminal/v1"
+	terminalpb "github.com/gravitational/teleport/lib/terminal/api/protogen/golang/v1"
 	log "github.com/sirupsen/logrus"
 )
 

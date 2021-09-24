@@ -16,13 +16,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"os"
 	"syscall"
 
 	"github.com/gravitational/teleport/lib/terminal"
+	"github.com/gravitational/teleport/tool/tshd/config"
+
 	"github.com/gravitational/trace"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -30,39 +34,39 @@ var (
 	logFormat = flag.String("log_format", "", "Log format to use (json or text)")
 	logLevel  = flag.String("log_level", "", "Log level to use")
 
-	addr      = flag.String("addr", "tcp://localhost:", "Bind address for the Terminal server")
-	certFile  = flag.String("cert_file", "", "Cert file (or inline PEM) for the Terminal server. Enables TLS.")
-	certKey   = flag.String("cert_key", "", "Key file (or inline PEM) for the Terminal server. Enables TLS.")
-	clientCAs = flag.String("client_cas", "", "Client CA certificate (or inline PEM) for the Terminal server. Enables mTLS.")
-	stdin     = flag.Bool("stdin", false, "Read server configuration from stdin")
+	addr       = flag.String("addr", "tcp://localhost:", "Bind address for the Terminal server")
+	certFile   = flag.String("cert_file", "", "Cert file (or inline PEM) for the Terminal server. Enables TLS.")
+	certKey    = flag.String("cert_key", "", "Key file (or inline PEM) for the Terminal server. Enables TLS.")
+	clientCAs  = flag.String("client_cas", "", "Client CA certificate (or inline PEM) for the Terminal server. Enables mTLS.")
+	stdin      = flag.Bool("stdin", false, "Read server configuration from stdin")
+	configPath = flag.String("config", "", "config file")
 )
 
 func main() {
 	flag.Parse()
-	configureLogging()
+	cfg, err := config.New(*configPath)
+	if err != nil {
+		log.Fatal(trace.Wrap(err))
+	}
+
+	if err := json.NewDecoder(os.Stdout).Decode(&cfg); err != nil {
+		log.Fatal(trace.Wrap(err))
+	}
+
+	configureLogging(cfg)
 
 	if err := run(); err != nil {
-		log.Fatal(err)
+		log.Fatal(trace.Wrap(err))
 	}
 }
 
-func configureLogging() {
-	switch *logFormat {
-	case "": // OK, use defaults
-	case "json":
-		log.SetFormatter(&log.JSONFormatter{})
-	case "text":
-		log.SetFormatter(&log.TextFormatter{})
-	default:
-		log.Warnf("Invalid log_format flag: %q", *logFormat)
-	}
-	if ll := *logLevel; ll != "" {
-		switch level, err := log.ParseLevel(ll); {
-		case err == nil:
-			log.WithError(err).Warn("Invalid -log_level flag")
-		default:
-			log.SetLevel(level)
-		}
+func configureLogging(cfg config.Config) {
+	if cfg.Debug {
+		log.SetLevel(log.DebugLevel)
+		log.SetFormatter(&trace.TextFormatter{})
+	} else {
+		// Production
+		logrus.SetFormatter(&trace.JSONFormatter{})
 	}
 }
 
