@@ -37,12 +37,16 @@ type Selector struct {
 
 // RDSMatcher is a selector that matches RDS databases.
 type RDSMatcher struct {
+	// Regions are regions to query databases in.
+	Regions []string
 	// Tags are RDS resource tags to match.
 	Tags types.Labels
 }
 
 // RedshiftMatcher is a selector that matches Redshift databases.
 type RedshiftMatcher struct {
+	// Regions are regions to query databases in.
+	Regions []string
 	// Tags are Redshift resource tags to match.
 	Tags types.Labels
 }

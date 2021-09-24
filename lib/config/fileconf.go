@@ -907,12 +907,16 @@ type Selector struct {
 
 // MatchRDS represents RDS databases matcher.
 type MatchRDS struct {
+	// Regions are regions to query databases in.
+	Regions []string `yaml:"regions,omitempty"`
 	// Tags are tags to match when importing RDS databases.
 	Tags map[string]apiutils.Strings `yaml:"tags,omitempty"`
 }
 
 // MatchRedshift represents Redshift databases matcher.
 type MatchRedshift struct {
+	// Regions are regions to query databases in.
+	Regions []string `yaml:"regions,omitempty"`
 	// Tags are tags to match when importing Redshift databases.
 	Tags map[string]apiutils.Strings `yaml:"tags,omitempty"`
 }

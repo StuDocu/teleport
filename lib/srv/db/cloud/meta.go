@@ -149,6 +149,11 @@ func fetchRDSInstanceMetadata(ctx context.Context, rdsClient rdsiface.RDSAPI, in
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	return metadataFromRDSInstance(rdsInstance)
+}
+
+// metadataFromRDSInstance creates AWS metadata from the provided RDS instance.
+func metadataFromRDSInstance(rdsInstance *rds.DBInstance) (*types.AWS, error) {
 	parsedARN, err := arn.Parse(aws.StringValue(rdsInstance.DBInstanceArn))
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -185,6 +190,11 @@ func fetchRDSClusterMetadata(ctx context.Context, rdsClient rdsiface.RDSAPI, clu
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	return metadataFromRDSCluster(rdsCluster)
+}
+
+// metadataFromRDSCluster returns AWS metadata from the provided RDS cluster.
+func metadataFromRDSCluster(rdsCluster *rds.DBCluster) (*types.AWS, error) {
 	parsedARN, err := arn.Parse(aws.StringValue(rdsCluster.DBClusterArn))
 	if err != nil {
 		return nil, trace.Wrap(err)

@@ -940,10 +940,12 @@ func applyDatabasesConfig(fc *FileConfig, cfg *service.Config) error {
 			services.Selector{
 				MatchLabels: selector.MatchLabels,
 				MatchRDS: services.RDSMatcher{
-					Tags: selector.MatchRDS.Tags,
+					Regions: selector.MatchRDS.Regions,
+					Tags:    selector.MatchRDS.Tags,
 				},
 				MatchRedshift: services.RedshiftMatcher{
-					Tags: selector.MatchRedshift.Tags,
+					Regions: selector.MatchRedshift.Regions,
+					Tags:    selector.MatchRedshift.Tags,
 				},
 			})
 	}

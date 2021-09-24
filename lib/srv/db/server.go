@@ -85,6 +85,8 @@ type Config struct {
 	CADownloader CADownloader
 	// LockWatcher is a lock watcher.
 	LockWatcher *services.LockWatcher
+	// CloudClient creates cloud API clients.
+	CloudClients common.CloudClients
 	// CloudMeta fetches cloud metadata for cloud hosted databases.
 	CloudMeta *cloud.Metadata
 	// CloudIAM configures IAM for cloud hosted databases.
@@ -145,14 +147,21 @@ func (c *Config) CheckAndSetDefaults(ctx context.Context) (err error) {
 	if c.LockWatcher == nil {
 		return trace.BadParameter("missing LockWatcher")
 	}
+	if c.CloudClients == nil {
+		c.CloudClients = common.NewCloudClients()
+	}
 	if c.CloudMeta == nil {
-		c.CloudMeta, err = cloud.NewMetadata(cloud.MetadataConfig{})
+		c.CloudMeta, err = cloud.NewMetadata(cloud.MetadataConfig{
+			Clients: c.CloudClients,
+		})
 		if err != nil {
 			return trace.Wrap(err)
 		}
 	}
 	if c.CloudIAM == nil {
-		c.CloudIAM, err = cloud.NewIAM(ctx, cloud.IAMConfig{})
+		c.CloudIAM, err = cloud.NewIAM(ctx, cloud.IAMConfig{
+			Clients: c.CloudClients,
+		})
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -185,6 +194,8 @@ type Server struct {
 	log *logrus.Entry
 	// reconciler is used to reconcile proxied databases with database resources.
 	reconciler *services.Reconciler
+	// cloudWatchers watch cloud databases.
+	cloudWatchers []cloud.Watcher
 }
 
 // New returns a new database server.
@@ -211,6 +222,12 @@ func New(ctx context.Context, config Config) (*Server, error) {
 
 	// Reconciler will be reconciling database resources with proxied databases.
 	server.reconciler, err = server.getReconciler()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	// Create cloud watchers that will be auto-fetching cloud databases.
+	server.cloudWatchers, err = server.getCloudWatchers()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -491,6 +508,20 @@ func (s *Server) Start(ctx context.Context) error {
 	// proxied databases based on the database resources.
 	if s.watcher, err = s.startWatcher(ctx); err != nil {
 		return trace.Wrap(err)
+	}
+
+	// Fetch and register cloud databases.
+	for _, watcher := range s.cloudWatchers {
+		databases, err := watcher.Get(ctx)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		for _, database := range databases {
+			s.log.Debugf("Registering cloud database %v.", database)
+			if err := s.registerDatabase(ctx, database); err != nil {
+				return trace.Wrap(err)
+			}
+		}
 	}
 
 	return nil

@@ -22,6 +22,7 @@ import (
 	"github.com/gravitational/teleport"
 	"github.com/gravitational/teleport/api/types"
 	"github.com/gravitational/teleport/lib/services"
+	"github.com/gravitational/teleport/lib/srv/db/cloud"
 
 	"github.com/gravitational/trace"
 )
@@ -61,6 +62,29 @@ func (s *Server) startWatcher(ctx context.Context) (*services.DatabaseWatcher, e
 		}
 	}()
 	return watcher, nil
+}
+
+func (s *Server) getCloudWatchers() (watchers []cloud.Watcher, err error) {
+	for _, selector := range s.cfg.Selectors {
+		if len(selector.MatchRDS.Tags) != 0 {
+			for _, region := range selector.MatchRDS.Regions {
+				rds, err := s.cfg.CloudClients.GetAWSRDSClient(region)
+				if err != nil {
+					return nil, trace.Wrap(err)
+				}
+				watcher, err := cloud.NewRDSWatcher(cloud.RDSWatcherConfig{
+					Labels: selector.MatchRDS.Tags,
+					RDS:    rds,
+					Region: region,
+				})
+				if err != nil {
+					return nil, trace.Wrap(err)
+				}
+				watchers = append(watchers, watcher)
+			}
+		}
+	}
+	return watchers, nil
 }
 
 func (s *Server) getReconciler() (*services.Reconciler, error) {
