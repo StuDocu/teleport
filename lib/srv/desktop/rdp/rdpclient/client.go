@@ -79,6 +79,10 @@ func init() {
 type Config struct {
 	// Addr is the network address of the RDP server, in the form host:port.
 	Addr string
+	// UserCertDER and UserKeyDER are user X.509 credentials for RDP
+	// authentication in DER format.
+	UserCertDER []byte
+	UserKeyDER  []byte
 	// InputMessage is called to receive a message from the client for the RDP
 	// server. This function should block until there is a message.
 	InputMessage func() (deskproto.Message, error)
@@ -91,6 +95,12 @@ type Config struct {
 func (c *Config) checkAndSetDefaults() error {
 	if c.Addr == "" {
 		return trace.BadParameter("missing Addr in rdpclient.Config")
+	}
+	if len(c.UserCertDER) == 0 {
+		return trace.BadParameter("missing UserCertDER in rdpclient.Config")
+	}
+	if len(c.UserKeyDER) == 0 {
+		return trace.BadParameter("missing UserKeyDER in rdpclient.Config")
 	}
 	if c.InputMessage == nil {
 		return trace.BadParameter("missing InputMessage in rdpclient.Config")
@@ -182,7 +192,7 @@ func (c *Client) connect() error {
 	// TODO(awly): remove this after certificates are implemented.
 	passwordStr := os.Getenv("TELEPORT_DEV_RDP_PASSWORD")
 	if passwordStr == "" {
-		return trace.BadParameter("missing TELEPORT_DEV_RDP_PASSWORD env var and certificate authentication is not implemented yet")
+		c.cfg.Log.Info("no TELEPORT_DEV_RDP_PASSWORD env var, assuming certificate-based authentication")
 	}
 	password := C.CString(passwordStr)
 	defer C.free(unsafe.Pointer(password))
@@ -191,6 +201,10 @@ func (c *Client) connect() error {
 		addr,
 		username,
 		password,
+		C.uint32_t(len(c.cfg.UserCertDER)),
+		(*C.uint8_t)(unsafe.Pointer(&c.cfg.UserCertDER[0])),
+		C.uint32_t(len(c.cfg.UserKeyDER)),
+		(*C.uint8_t)(unsafe.Pointer(&c.cfg.UserKeyDER[0])),
 		C.uint16_t(c.clientWidth),
 		C.uint16_t(c.clientHeight),
 	)

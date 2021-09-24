@@ -1,4 +1,5 @@
 pub mod errors;
+pub mod piv;
 pub mod rdpdr;
 pub mod scard;
 
@@ -18,17 +19,15 @@ use rdp::core::tpkt;
 use rdp::core::x224;
 use rdp::model::error::{Error as RdpError, RdpError as RdpProtocolError, RdpErrorKind, RdpResult};
 use rdp::model::link::{Link, Stream};
-use rdp::nla::ntlm::Ntlm;
 use std::convert::TryFrom;
 use std::ffi::{CStr, CString};
 use std::io::Error as IoError;
 use std::io::{Cursor, Read, Write};
-use std::mem;
 use std::net::TcpStream;
 use std::os::raw::c_char;
 use std::os::unix::io::AsRawFd;
-use std::ptr;
 use std::sync::{Arc, Mutex};
+use std::{mem, ptr, slice};
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -90,6 +89,10 @@ pub extern "C" fn connect_rdp(
     go_addr: *mut c_char,
     go_username: *mut c_char,
     go_password: *mut c_char,
+    cert_der_len: u32,
+    cert_der: *mut u8,
+    key_der_len: u32,
+    key_der: *mut u8,
     screen_width: u16,
     screen_height: u16,
 ) -> ClientOrError {
@@ -97,8 +100,19 @@ pub extern "C" fn connect_rdp(
     let addr = from_go_string(go_addr);
     let username = from_go_string(go_username);
     let password = from_go_string(go_password);
+    let cert_der = from_go_array(cert_der_len, cert_der);
+    let key_der = from_go_array(key_der_len, key_der);
 
-    connect_rdp_inner(&addr, username, password, screen_width, screen_height).into()
+    connect_rdp_inner(
+        &addr,
+        username,
+        password,
+        cert_der,
+        key_der,
+        screen_width,
+        screen_height,
+    )
+    .into()
 }
 
 #[derive(Debug)]
@@ -123,6 +137,8 @@ fn connect_rdp_inner(
     addr: &str,
     username: String,
     password: String,
+    cert_der: Vec<u8>,
+    key_der: Vec<u8>,
     screen_width: u16,
     screen_height: u16,
 ) -> Result<Client, ConnectError> {
@@ -133,16 +149,8 @@ fn connect_rdp_inner(
 
     // From rdp-rs/src/core/client.rs
     let tcp = Link::new(Stream::Raw(tcp));
-    let mut authentication = Ntlm::new(domain.to_string(), username.clone(), password.clone());
-    let protocols = x224::Protocols::ProtocolSSL as u32 | x224::Protocols::ProtocolHybrid as u32;
-    let x224 = x224::Client::connect(
-        tpkt::Client::new(tcp),
-        protocols,
-        false,
-        Some(&mut authentication),
-        false,
-        false,
-    )?;
+    let protocols = x224::Protocols::ProtocolSSL as u32 | x224::Protocols::ProtocolRDP as u32;
+    let x224 = x224::Client::connect(tpkt::Client::new(tcp), protocols, false, None, false, false)?;
     let mut mcs = mcs::Client::new(x224);
     mcs.connect(
         "rdp-rs".to_string(),
@@ -151,7 +159,26 @@ fn connect_rdp_inner(
         KeyboardLayout::US,
         &vec!["rdpdr".to_string(), "rdpsnd".to_string()],
     )?;
-    sec::connect(&mut mcs, &domain.to_string(), &username, &password, false)?;
+    let smartcard_authn = !cert_der.is_empty() && !key_der.is_empty();
+    // Password must be non-empty for autologin (sec::InfoFlag::InfoPasswordIsScPin) to trigger on
+    // a smartcard.
+    let password = if password.is_empty() {
+        "123".to_string()
+    } else {
+        password
+    };
+    sec::connect(
+        &mut mcs,
+        &domain.to_string(),
+        &username,
+        &password,
+        true,
+        if smartcard_authn {
+            Some(sec::InfoFlag::InfoPasswordIsScPin as u32)
+        } else {
+            None
+        },
+    )?;
     let global = global::Client::new(
         mcs.get_user_id(),
         mcs.get_global_channel_id(),
@@ -160,7 +187,7 @@ fn connect_rdp_inner(
         KeyboardLayout::US,
         "rdp-rs",
     );
-    let rdpdr = rdpdr::Client::new();
+    let rdpdr = rdpdr::Client::new(cert_der, key_der);
 
     let rdp_client = RdpClient { mcs, global, rdpdr };
     Ok(Client {
@@ -461,6 +488,10 @@ pub unsafe extern "C" fn free_rust_string(s: *mut c_char) {
 
 fn from_go_string(s: *mut c_char) -> String {
     unsafe { CStr::from_ptr(s).to_string_lossy().into_owned().clone() }
+}
+
+fn from_go_array(len: u32, ptr: *mut u8) -> Vec<u8> {
+    unsafe { slice::from_raw_parts(ptr, len as usize).to_vec() }
 }
 
 // CGOError is an alias for a C string pointer, for C API clarity.
