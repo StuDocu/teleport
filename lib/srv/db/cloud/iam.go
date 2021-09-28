@@ -102,6 +102,7 @@ func (c *IAM) getRDSConfigurator(ctx context.Context, database types.Database) (
 func (c *IAM) getAWSIdentity(ctx context.Context) (cloud.AWSIdentity, error) {
 	c.mu.RLock()
 	if c.awsIdentity != nil {
+		defer c.mu.RUnlock()
 		return c.awsIdentity, nil
 	}
 	c.mu.RUnlock()
