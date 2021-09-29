@@ -39,9 +39,29 @@ resource "aws_nat_gateway" "teleport" {
   }
 }
 
+data "aws_vpc" "stagingvpc" {
+  default = true
+}
+
+resource "aws_vpc_peering_connection" "ConnectionToStagingVPC" {
+  peer_owner_id = aws_vpc.teleport.owner_id
+  peer_vpc_id   = data.aws_vpc.stagingvpc.id
+  vpc_id        = aws_vpc.teleport.id
+  tags = {
+    Name = "Teleport-Frankfurt"
+  }
+}
+
+resource "aws_vpc_peering_connection_accepter" "ConnectionAcceptanceToStagingVPC" {
+  vpc_peering_connection_id = aws_vpc_peering_connection.ConnectionToStagingVPC.id
+  auto_accept               = true
+}
+
 locals {
   vpc_id              = aws_vpc.teleport.id
   internet_gateway_id = aws_internet_gateway.teleport.id
   nat_gateways        = aws_nat_gateway.teleport.*.id
 }
+
+
 

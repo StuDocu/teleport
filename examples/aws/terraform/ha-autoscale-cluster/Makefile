@@ -47,13 +47,13 @@ export
 .PHONY: plan
 plan:
 	terraform init
-	terraform plan
+	terraform plan -var-file="terraform.tfvars"
 
 # Apply launches terraform apply
 .PHONY: apply
 apply:
 	terraform init
-	terraform apply
+	terraform apply -var-file="terraform.tfvars"
 
 # Destroy destroys the infrastructure, it doesn't ask for confirmation so be sure you actually want to
 .PHONY: destroy-yes-i-want-to-do-this

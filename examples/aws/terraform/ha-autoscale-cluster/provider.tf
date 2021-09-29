@@ -14,6 +14,13 @@ terraform {
       version = "~> 2.2.1"
     }
   }
+  backend "remote" {
+    organization = "studocu"
+
+    workspaces {
+      name = "teleport-ha"
+    }
+  }
 }
 
 provider "aws" {
